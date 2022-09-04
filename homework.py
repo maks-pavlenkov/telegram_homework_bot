@@ -1,10 +1,20 @@
 import time
 import requests
 from http import HTTPStatus
+import logging
+import sys
+from logging import StreamHandler, Formatter
 from telegram import Bot
-from logger_setting import logger
 from tokens import PRACTICUM_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_TOKEN
 from constants import RETRY_TIME, ENDPOINT, HEADERS, HOMEWORK_STATUSES
+
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+handler = StreamHandler(stream=sys.stdout)
+handler.setFormatter(Formatter(fmt='%(asctime)s - %(name)s - '
+                                   '%(levelname)s - %(message)s'))
+logger.addHandler(handler)
 
 
 def check_tokens():
