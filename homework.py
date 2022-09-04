@@ -1,48 +1,19 @@
-import logging
-from logging import StreamHandler, Formatter
-import sys
-import os
 import time
 import requests
-from telegram import Bot
-from dotenv import load_dotenv
 from http import HTTPStatus
-
-load_dotenv()
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-handler = StreamHandler(stream=sys.stdout)
-handler.setFormatter(Formatter(fmt='%(asctime)s - %(name)s - '
-                                   '%(levelname)s - %(message)s'))
-logger.addHandler(handler)
-
-PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
-TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
-TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
-
-tokens = [PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]
-
-RETRY_TIME = 600
-ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
-HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
-
-HOMEWORK_STATUSES = {
-    'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
-    'reviewing': 'Работа взята на проверку ревьюером.',
-    'rejected': 'Работа проверена: у ревьюера есть замечания.'
-}
+from telegram import Bot
+from logger_setting import logger
+from tokens import PRACTICUM_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_TOKEN
+from constants import RETRY_TIME, ENDPOINT, HEADERS, HOMEWORK_STATUSES
 
 
 def check_tokens():
     """Checking that all the tokens are correct."""
     if PRACTICUM_TOKEN and TELEGRAM_TOKEN and TELEGRAM_CHAT_ID:
-        message = 'Все обязательные переменные окружения настроены'
-        logger.info(message)
+        logger.info('Все обязательные переменные окружения настроены')
         return True
-    else:
-        message = 'Настроены не все переменные окружения'
-        logger.critical(message)
-        return False
+    logger.critical('Настроены не все переменные окружения')
+    return False
 
 
 def get_api_answer(current_timestamp):
@@ -52,7 +23,7 @@ def get_api_answer(current_timestamp):
     try:
         response = requests.get(ENDPOINT, params, headers=HEADERS)
         if response.status_code != HTTPStatus.OK:
-            message = 'Ответ от API Практикума не 200'
+            message = f'Ответ от API Практикума {response.status_code} != 200'
             logger.critical(message)
             raise Exception(message)
         return response.json()
@@ -87,15 +58,13 @@ def check_response(response):
 def parse_status(homework):
     """Getting ready an answer message."""
     if 'homework_name' not in homework:
-        message = 'Атрибут homework не найден в переменной'
-        logger.error(message)
+        logger.error('Атрибут homework не найден в переменной')
     if 'status' not in homework:
-        message = 'Атрибут status не найден в переменной'
-        logger.error(message)
+        logger.error('Атрибут status не найден в переменной')
     homework_name = homework['homework_name']
     homework_status = homework['status']
     if homework_status not in HOMEWORK_STATUSES:
-        message = 'Неизвестный статус домашней работы'
+        message = f'Статуса {homework_status} нет в списке {HOMEWORK_STATUSES}'
         logger.error(message)
         raise Exception(message)
     verdict = HOMEWORK_STATUSES[homework_status]
@@ -110,15 +79,14 @@ def send_message(bot, message):
         logger.critical(err)
         raise Exception(err)
     else:
-        message = 'Сообщение успешно отправлено'
-        logger.info(message)
+        logger.info(f'Сообщение со статусом {message} успешно отправлено')
 
 
 def main():
     """Main logic."""
     bot = Bot(token=TELEGRAM_TOKEN)
     current_timestamp = int(time.time())
-    if not check_tokens(tokens):
+    if not check_tokens():
         return
     response = get_api_answer(current_timestamp)
     homework = check_response(response)
@@ -131,17 +99,14 @@ def main():
                 message = parse_status(homework[0])
                 send_message(bot, message)
                 latest_status = homework[0]['status']
-                message = 'Проверка обновлений ДЗ завершена'
-                logger.info(message)
+                logger.info('Проверка обновлений ДЗ завершена')
             else:
-                message = 'Обновлений не было'
-                logger.info(message)
+                logger.info('Обновлений не было')
             current_timestamp = response.get('current_date', current_timestamp)
             time.sleep(RETRY_TIME)
 
         except Exception as error:
-            message = f'Сбой в работе программы: {error}'
-            logger.critical(message)
+            logger.critical(f'Сбой в работе программы: {error}')
             time.sleep(RETRY_TIME)
             raise Exception(error)
 
