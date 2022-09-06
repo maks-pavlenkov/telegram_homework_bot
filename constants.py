@@ -3,7 +3,7 @@ from tokens import PRACTICUM_TOKEN
 
 RETRY_TIME = 600
 HOST = 'https://practicum.yandex.ru'
-ENDPOINT = f'{HOST}/api/user_api/homework_statuses/'
+ENDPOINT = '/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
 HOMEWORK_STATUSES = {

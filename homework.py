@@ -1,20 +1,14 @@
+import json
 import time
-import requests
 from http import HTTPStatus
 import logging
-import sys
-from logging import StreamHandler, Formatter
+import requests
 from telegram import Bot
 from tokens import PRACTICUM_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_TOKEN
-from constants import RETRY_TIME, ENDPOINT, HEADERS, HOMEWORK_STATUSES
+from constants import RETRY_TIME, ENDPOINT, HEADERS, HOMEWORK_STATUSES, HOST
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-handler = StreamHandler(stream=sys.stdout)
-handler.setFormatter(Formatter(fmt='%(asctime)s - %(name)s - '
-                                   '%(levelname)s - %(message)s'))
-logger.addHandler(handler)
 
 
 def check_tokens():
@@ -31,7 +25,7 @@ def get_api_answer(current_timestamp):
     timestamp = current_timestamp or int(time.time())
     params = {'from_date': timestamp}
     try:
-        response = requests.get(ENDPOINT, params, headers=HEADERS)
+        response = requests.get(HOST + ENDPOINT, params, headers=HEADERS)
         if response.status_code != HTTPStatus.OK:
             message = f'Ответ от API Практикума {response.status_code} != 200'
             logger.critical(message)
@@ -40,6 +34,9 @@ def get_api_answer(current_timestamp):
     except requests.exceptions.RequestException as err:
         logger.critical(err)
         raise Exception(err)
+    except json.decoder.JSONDecodeError as err:
+        logger.error(err)
+        raise json.decoder.JSONDecodeError(err)
 
 
 def check_response(response):
@@ -51,15 +48,15 @@ def check_response(response):
         logger.error(message)
         raise Exception(message)
     if not homeworks:
-        message = 'Словарь пустой'
+        message = f'Словарь homeworks пустой - {homeworks}'
         logger.error(message)
         raise Exception(message)
     if not isinstance(response, dict):
-        message = 'В ответе не словарь'
+        message = f'В ответе API {type(response)} != dict'
         logger.error(message)
         raise Exception(message)
     if not isinstance(response['homeworks'], list):
-        message = 'В ответе в ключе homeworks не список'
+        message = f'В ответе в ключе homeworks {response["homeworks"]} != list'
         logger.error(message)
         raise Exception(message)
     return response['homeworks']
@@ -68,9 +65,10 @@ def check_response(response):
 def parse_status(homework):
     """Getting ready an answer message."""
     if 'homework_name' not in homework:
-        logger.error('Атрибут homework не найден в переменной')
+        logger.error(f'Атрибут homework_name не найден'
+                     f' в переменной homework - {homework}')
     if 'status' not in homework:
-        logger.error('Атрибут status не найден в переменной')
+        logger.error(f'Атрибут status не найден в переменной - {homework}')
     homework_name = homework['homework_name']
     homework_status = homework['status']
     if homework_status not in HOMEWORK_STATUSES:
@@ -88,8 +86,7 @@ def send_message(bot, message):
     except Exception as err:
         logger.critical(err)
         raise Exception(err)
-    else:
-        logger.info(f'Сообщение со статусом {message} успешно отправлено')
+    logger.info(f'Сообщение со статусом {message} успешно отправлено')
 
 
 def main():
